@@ -38,13 +38,25 @@
       "Bash(npx tsx src/index.ts add --help)",
       "Bash(npx tsx src/index.ts edit --help)",
       "WebFetch(domain:langfuse.com)",
-      "Bash(find /workspaces/dev-langfuse -type f \\\\\\( -name \"package.json\" -o -name \"requirements.txt\" -o -name \"pom.xml\" -o -name \"*.csproj\" \\\\\\) -exec head -30 {} +)",
+      "Bash(find /workspaces/dev-ocr -type f \\\\\\( -name \"package.json\" -o -name \"requirements.txt\" -o -name \"pom.xml\" -o -name \"*.csproj\" \\\\\\) -exec head -30 {} +)",
       "Bash(docker --version)",
       "Bash(docker compose version)",
       "Bash(apt list --installed)",
       "Bash(snap list)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(ls -la /c/Projects/github/infinith4/dev-ocr/*.md)",
+      "Bash(npm create vite@latest frontend -- --template react-ts)",
+      "Bash(npm install)",
+      "Bash(pip show langfuse)",
+      "Bash(python -c \"import langfuse; print\\(dir\\(langfuse\\)\\)\")",
+      "Bash(python -c \"from langfuse import decorators\")",
+      "Bash(python -c \"from langfuse.openai import observe\")",
+      "Bash(python -c \"import langfuse.decorators\")",
+      "Bash(python -c \"from backendapp.llm_service import call_llm; print\\(''OK''\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(xargs ls -la)"
     ]
   }
 }

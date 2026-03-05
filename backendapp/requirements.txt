@@ -1,8 +1,9 @@
 fastapi>=0.110.0
 uvicorn[standard]
 pydantic
-litellm
-langfuse
 python-dotenv
 pytest
 httpx
+python-multipart>=0.0.9
+pdf2image>=1.17.0
+ndlocr-lite @ git+https://github.com/ndl-lab/ndlocr-lite.git

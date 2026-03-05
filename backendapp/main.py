@@ -1,30 +1,31 @@
-"""FastAPI backend with LLM chat endpoint and Langfuse tracing."""
+"""FastAPI backend with OCR endpoints."""
 
+import io
 from contextlib import asynccontextmanager
-from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from PIL import Image
 from pydantic import BaseModel
 
 load_dotenv()
 
-from backendapp.llm_service import call_llm  # noqa: E402
+from backendapp.ocr_service import engine  # noqa: E402
+from backendapp.pdf_service import pdf_to_images  # noqa: E402
+
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    engine.initialize()
     yield
-    # Flush Langfuse events on shutdown
-    from langfuse.decorators import langfuse_context
-
-    langfuse_context.flush()
 
 
 app = FastAPI(
-    title="LLMOps Backend",
-    description="FastAPI backend with multi-provider LLM support and Langfuse tracing",
-    version="0.1.0",
+    title="OCR Backend",
+    description="FastAPI backend with ndlocr-lite OCR",
+    version="0.2.0",
     lifespan=lifespan,
 )
 app.openapi_version = "3.0.3"
@@ -38,106 +39,64 @@ def health():
     return {"status": "ok"}
 
 
-# --- Chat Endpoint ---
+# --- OCR Endpoint ---
+
+SUPPORTED_IMAGES = {"jpg", "jpeg", "png", "tiff", "tif", "jp2", "bmp"}
 
 
-class ChatRequest(BaseModel):
-    message: str
-    model: str = "openai/gpt-4o"
-    system: Optional[str] = None
-    max_tokens: int = 1024
+class OCRPageResult(BaseModel):
+    page: int
+    text: str
+    line_count: int
 
 
-class ChatResponse(BaseModel):
-    response: str
-    model: str
+class OCRResponse(BaseModel):
+    text: str
+    pages: list[OCRPageResult]
+    total_lines: int
 
 
-@app.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
-    """Send a message to an LLM and get a response.
+@app.post("/ocr", response_model=OCRResponse)
+async def ocr_upload(file: UploadFile = File(...)):
+    """Upload a PDF or image file and get OCR text.
 
-    All calls are automatically traced in Langfuse.
-
-    Supported model formats:
-    - openai/gpt-4o
-    - anthropic/claude-sonnet-4-20250514
-    - azure/gpt-4o
-    - gemini/gemini-pro
+    Supported formats: jpg, jpeg, png, tiff, tif, jp2, bmp, pdf
     """
-    try:
-        response_text = call_llm(
-            prompt=request.message,
-            model=request.model,
-            system=request.system or "",
-            max_tokens=request.max_tokens,
+    contents = await file.read()
+    if len(contents) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum 50MB.")
+
+    filename = file.filename or "unknown"
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+    if ext == "pdf":
+        images = pdf_to_images(contents)
+    elif ext in SUPPORTED_IMAGES:
+        images = [Image.open(io.BytesIO(contents))]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {ext}. Supported: pdf, {', '.join(sorted(SUPPORTED_IMAGES))}",
         )
-        return ChatResponse(response=response_text, model=request.model)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
+    pages: list[OCRPageResult] = []
+    all_text_parts: list[str] = []
+    total_lines = 0
 
-# --- Item CRUD (in-memory, from execplan-fastapi-backend) ---
+    for i, img in enumerate(images):
+        result = engine.ocr_image(img)
+        pages.append(
+            OCRPageResult(
+                page=i + 1,
+                text=result["text"],
+                line_count=result["line_count"],
+            )
+        )
+        all_text_parts.append(result["text"])
+        total_lines += result["line_count"]
 
-_items: dict[int, dict] = {}
-_next_id = 1
-
-
-class ItemBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-    price: float
-    tags: list[str] = []
-
-
-class ItemCreate(ItemBase):
-    pass
-
-
-class ItemUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    price: Optional[float] = None
-    tags: Optional[list[str]] = None
-
-
-class Item(ItemBase):
-    id: int
-
-
-@app.get("/items", response_model=list[Item])
-def list_items():
-    return [Item(id=k, **v) for k, v in _items.items()]
-
-
-@app.post("/items", response_model=Item, status_code=201)
-def create_item(item: ItemCreate):
-    global _next_id
-    item_id = _next_id
-    _next_id += 1
-    _items[item_id] = item.model_dump()
-    return Item(id=item_id, **_items[item_id])
-
-
-@app.get("/items/{item_id}", response_model=Item)
-def get_item(item_id: int):
-    if item_id not in _items:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return Item(id=item_id, **_items[item_id])
-
-
-@app.put("/items/{item_id}", response_model=Item)
-def update_item(item_id: int, item: ItemUpdate):
-    if item_id not in _items:
-        raise HTTPException(status_code=404, detail="Item not found")
-    update_data = item.model_dump(exclude_unset=True)
-    _items[item_id].update(update_data)
-    return Item(id=item_id, **_items[item_id])
-
-
-@app.delete("/items/{item_id}")
-def delete_item(item_id: int):
-    if item_id not in _items:
-        raise HTTPException(status_code=404, detail="Item not found")
-    del _items[item_id]
-    return {"status": "deleted", "id": item_id}
+    return OCRResponse(
+        text="\n\n".join(all_text_parts),
+        pages=pages,
+        total_lines=total_lines,
+    )
