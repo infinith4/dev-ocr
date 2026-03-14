@@ -1,5 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import type { OcrProgress } from "../api/ocr";
+import type { Messages } from "../i18n";
+import { translate } from "../i18n";
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
@@ -7,11 +9,19 @@ interface FileUploadProps {
   loading: boolean;
   hasFile: boolean;
   progress?: OcrProgress | null;
+  messages: Messages["upload"];
 }
 
 const ACCEPTED = ".pdf,.jpg,.jpeg,.png,.tiff,.tif,.jp2,.bmp";
 
-export default function FileUpload({ onFileSelect, onStartOcr, loading, hasFile, progress }: FileUploadProps) {
+export default function FileUpload({
+  onFileSelect,
+  onStartOcr,
+  loading,
+  hasFile,
+  progress,
+  messages,
+}: FileUploadProps) {
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -72,7 +82,7 @@ export default function FileUpload({ onFileSelect, onStartOcr, loading, hasFile,
             <div className="spinner" />
             {progress && progress.total > 0 ? (
               <>
-                <p>Processing page {progress.current} / {progress.total}...</p>
+                <p>{translate(messages.processingPage, { current: progress.current, total: progress.total })}</p>
                 <div className="progress-bar">
                   <div
                     className="progress-fill"
@@ -81,20 +91,20 @@ export default function FileUpload({ onFileSelect, onStartOcr, loading, hasFile,
                 </div>
               </>
             ) : (
-              <p>OCR processing...</p>
+              <p>{messages.processing}</p>
             )}
           </div>
         ) : selectedFile ? (
           <div className="file-info">
             <p className="file-name">{selectedFile.name}</p>
             <p className="file-size">{formatSize(selectedFile.size)}</p>
-            <p className="hint">Click or drop to change file</p>
+            <p className="hint">{messages.changeFile}</p>
           </div>
         ) : (
           <div className="placeholder">
             <p className="upload-icon">+</p>
-            <p>Click or drag & drop a file here</p>
-            <p className="hint">PDF, JPG, PNG, TIFF, BMP</p>
+            <p>{messages.dropPrompt}</p>
+            <p className="hint">{messages.formats}</p>
           </div>
         )}
       </div>
@@ -103,7 +113,7 @@ export default function FileUpload({ onFileSelect, onStartOcr, loading, hasFile,
         onClick={onStartOcr}
         disabled={!hasFile || loading}
       >
-        {loading ? "Processing..." : "OCR Start"}
+        {loading ? messages.running : messages.start}
       </button>
     </div>
   );

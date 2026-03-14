@@ -5,12 +5,13 @@ import json
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from PIL import Image
 
 load_dotenv()
 
+from backendapp.ocr_evaluation import evaluate_all_methods  # noqa: E402
 from backendapp.ocr_service import DEFAULT_ENGINE, get_engine  # noqa: E402
 from backendapp.pdf_service import pdf_to_images  # noqa: E402
 
@@ -122,3 +123,26 @@ def _generate_markdown(images, filename: str, ocr_engine):
         except Exception as e:
             yield f"\n\n> **Error on page {i + 1}**: {e}\n\n"
             return
+
+
+@app.post("/ocr/evaluate")
+async def evaluate_ocr_output(
+    expected_file: UploadFile = File(...),
+    actual_text: str = Form(...),
+):
+    expected_bytes = await expected_file.read()
+    if not expected_bytes:
+        raise HTTPException(status_code=400, detail="expected_file is empty.")
+    if not actual_text:
+        raise HTTPException(status_code=400, detail="actual_text is empty.")
+
+    try:
+        expected_text = expected_bytes.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail="expected_file must be UTF-8 text.") from exc
+
+    results = evaluate_all_methods(expected_text, actual_text)
+    return {
+        "normalization_summary": results[0].normalization_summary,
+        "results": [result.to_dict() for result in results],
+    }

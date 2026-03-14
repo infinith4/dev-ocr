@@ -7,7 +7,7 @@ import pytest
 from fastapi import HTTPException
 from PIL import Image
 
-from backendapp.main import _generate_markdown, _generate_ndjson, health, ocr_upload
+from backendapp.main import _generate_markdown, _generate_ndjson, evaluate_ocr_output, health, ocr_upload
 
 
 class DummyUploadFile:
@@ -131,3 +131,56 @@ def test_generate_markdown_multi_page():
         "## Page 2\n\n"
         "second page\n\n"
     )
+
+
+def test_evaluate_ocr_output_empty_text():
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            evaluate_ocr_output(
+                expected_file=DummyUploadFile("expected.md", b"abc"),
+                actual_text="",
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "actual_text is empty" in exc_info.value.detail
+
+
+def test_evaluate_ocr_output_returns_both_methods():
+    response = asyncio.run(
+        evaluate_ocr_output(
+            expected_file=DummyUploadFile("expected.md", "alpha beta".encode("utf-8")),
+            actual_text="alpha gamma",
+        )
+    )
+
+    assert response["normalization_summary"]
+    assert [item["method"] for item in response["results"]] == [
+        "python-Levenshtein",
+        "jiwer",
+    ]
+
+
+def test_evaluate_ocr_output_with_utf8_text():
+    payload = asyncio.run(
+        evaluate_ocr_output(
+            expected_file=DummyUploadFile("expected.md", "abc".encode("utf-8")),
+            actual_text="adc",
+        )
+    )
+
+    assert len(payload["results"]) == 2
+    assert payload["results"][0]["char_distance"] == 1
+
+
+def test_evaluate_ocr_output_rejects_non_utf8_text():
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            evaluate_ocr_output(
+                expected_file=DummyUploadFile("expected.md", b"\xff\xfe\x00"),
+                actual_text="adc",
+            )
+        )
+
+    assert exc_info.value.status_code == 400
+    assert "UTF-8" in exc_info.value.detail

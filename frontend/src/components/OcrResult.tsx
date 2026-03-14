@@ -1,21 +1,30 @@
 import { useState } from "react";
-import type { OcrResponse } from "../api/ocr";
+import type { OcrEngineType, OcrResponse } from "../api/ocr";
+import type { Messages } from "../i18n";
+import { translate } from "../i18n";
 
 interface OcrResultProps {
-  result: OcrResponse;
+  activeEngine: OcrEngineType;
+  resultsByEngine: Partial<Record<OcrEngineType, OcrResponse>>;
   filename: string;
+  messages: Messages["result"];
 }
 
-function toMarkdown(result: OcrResponse, filename: string): string {
+const ENGINE_LABELS: Record<OcrEngineType, string> = {
+  paddleocr: "PaddleOCR",
+  ndlocr: "ndlocr-lite",
+};
+
+function toMarkdown(result: OcrResponse, filename: string, messages: Messages["result"]): string {
   if (result.pages.length <= 1) {
     return `${result.text}\n`;
   }
 
   const sections = result.pages
-    .map((page) => `## Page ${page.page}\n\n${page.text}`)
+    .map((page) => `## ${translate(messages.page, { page: page.page })}\n\n${page.text}`)
     .join("\n\n");
 
-  return `# OCR Result: ${filename}\n\n${sections}\n`;
+  return `# ${messages.title}: ${filename}\n\n${sections}\n`;
 }
 
 function toMarkdownFilename(filename: string): string {
@@ -24,14 +33,23 @@ function toMarkdownFilename(filename: string): string {
     : `${filename || "ocr-result"}.md`;
 }
 
-export default function OcrResult({ result, filename }: OcrResultProps) {
+export default function OcrResult({ activeEngine, resultsByEngine, filename, messages }: OcrResultProps) {
+  const result = resultsByEngine[activeEngine] ?? null;
   const [activeTab, setActiveTab] = useState<"all" | number>("all");
   const [copied, setCopied] = useState(false);
+
+  if (!result) {
+    return null;
+  }
 
   const displayText =
     activeTab === "all"
       ? result.text
       : result.pages[activeTab]?.text || "";
+
+  const compareEngines = (["paddleocr", "ndlocr"] as const).filter(
+    (engine) => resultsByEngine[engine],
+  );
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(displayText);
@@ -40,7 +58,7 @@ export default function OcrResult({ result, filename }: OcrResultProps) {
   };
 
   const handleDownloadMarkdown = () => {
-    const markdown = toMarkdown(result, filename);
+    const markdown = toMarkdown(result, filename, messages);
     const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -55,14 +73,15 @@ export default function OcrResult({ result, filename }: OcrResultProps) {
   return (
     <div className="result-container">
       <div className="result-header">
-        <h2>OCR Result</h2>
-        <span className="line-count">{result.total_lines} lines detected</span>
+        <h2>{messages.title}</h2>
+        <span className="engine-badge">{ENGINE_LABELS[activeEngine]}</span>
+        <span className="line-count">{translate(messages.linesDetected, { count: result.total_lines })}</span>
         <div className="result-actions">
           <button className="secondary-btn" onClick={handleDownloadMarkdown}>
-            Download .md
+            {messages.download}
           </button>
           <button className="secondary-btn" onClick={handleCopy}>
-            {copied ? "Copied!" : "Copy"}
+            {copied ? messages.copied : messages.copy}
           </button>
         </div>
       </div>
@@ -73,7 +92,7 @@ export default function OcrResult({ result, filename }: OcrResultProps) {
             className={`tab ${activeTab === "all" ? "active" : ""}`}
             onClick={() => setActiveTab("all")}
           >
-            All Pages
+            {messages.allPages}
           </button>
           {result.pages.map((page) => (
             <button
@@ -81,13 +100,41 @@ export default function OcrResult({ result, filename }: OcrResultProps) {
               className={`tab ${activeTab === page.page - 1 ? "active" : ""}`}
               onClick={() => setActiveTab(page.page - 1)}
             >
-              Page {page.page}
+              {translate(messages.page, { page: page.page })}
             </button>
           ))}
         </div>
       )}
 
-      <pre className="result-text">{displayText || "(No text detected)"}</pre>
+      <pre className="result-text">{displayText || messages.noText}</pre>
+
+      {compareEngines.length === 2 && (
+        <div className="comparison-section">
+          <div className="comparison-header">
+            <h3>{messages.comparisonTitle}</h3>
+            <p>{messages.comparisonDescription}</p>
+          </div>
+          <div className="comparison-grid">
+            {compareEngines.map((engine) => {
+              const engineResult = resultsByEngine[engine]!;
+              const engineText =
+                activeTab === "all"
+                  ? engineResult.text
+                  : engineResult.pages[activeTab]?.text || messages.noTextOnPage;
+
+              return (
+                <article key={engine} className="comparison-card">
+                  <div className="comparison-card-header">
+                    <h4>{ENGINE_LABELS[engine]}</h4>
+                    <span>{translate(messages.lines, { count: engineResult.total_lines })}</span>
+                  </div>
+                  <pre className="comparison-text">{engineText || messages.noText}</pre>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

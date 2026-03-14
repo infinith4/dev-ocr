@@ -15,6 +15,22 @@ export interface OcrProgress {
   total: number;
 }
 
+export interface OcrEvaluationMethodResult {
+  method: string;
+  cer: number;
+  wer: number;
+  char_distance: number;
+  word_distance: number;
+  expected_char_count: number;
+  expected_word_count: number;
+  rating: string;
+}
+
+export interface OcrEvaluationResponse {
+  normalization_summary: string;
+  results: OcrEvaluationMethodResult[];
+}
+
 type NdjsonEvent =
   | { event: "start"; total_pages: number }
   | { event: "page"; page: number; text: string; line_count: number }
@@ -80,4 +96,25 @@ export async function runOcr(
   const text = pages.map((p) => p.text).join("\n\n");
   const total_lines = pages.reduce((sum, p) => sum + p.line_count, 0);
   return { text, pages, total_lines };
+}
+
+export async function evaluateOcrResult(
+  expectedFile: File,
+  actualText: string,
+): Promise<OcrEvaluationResponse> {
+  const formData = new FormData();
+  formData.append("expected_file", expectedFile);
+  formData.append("actual_text", actualText);
+
+  const res = await fetch("/api/ocr/evaluate", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || "OCR evaluation failed");
+  }
+
+  return res.json();
 }
