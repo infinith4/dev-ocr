@@ -1,16 +1,17 @@
 """FastAPI backend with OCR endpoints."""
 
 import io
+import json
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from PIL import Image
-from pydantic import BaseModel
 
 load_dotenv()
 
-from backendapp.ocr_service import engine  # noqa: E402
+from backendapp.ocr_service import DEFAULT_ENGINE, get_engine  # noqa: E402
 from backendapp.pdf_service import pdf_to_images  # noqa: E402
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
@@ -18,13 +19,13 @@ MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    engine.initialize()
+    get_engine(DEFAULT_ENGINE)
     yield
 
 
 app = FastAPI(
     title="OCR Backend",
-    description="FastAPI backend with ndlocr-lite OCR",
+    description="FastAPI backend with PaddleOCR",
     version="0.2.0",
     lifespan=lifespan,
 )
@@ -44,23 +45,19 @@ def health():
 SUPPORTED_IMAGES = {"jpg", "jpeg", "png", "tiff", "tif", "jp2", "bmp"}
 
 
-class OCRPageResult(BaseModel):
-    page: int
-    text: str
-    line_count: int
-
-
-class OCRResponse(BaseModel):
-    text: str
-    pages: list[OCRPageResult]
-    total_lines: int
-
-
-@app.post("/ocr", response_model=OCRResponse)
-async def ocr_upload(file: UploadFile = File(...)):
+@app.post("/ocr")
+async def ocr_upload(
+    file: UploadFile = File(...),
+    format: str = Query("ndjson", pattern="^(ndjson|markdown)$"),
+    engine_name: str = Query(DEFAULT_ENGINE, alias="engine", pattern="^(paddleocr|ndlocr)$"),
+):
     """Upload a PDF or image file and get OCR text.
 
     Supported formats: jpg, jpeg, png, tiff, tif, jp2, bmp, pdf
+
+    Query params:
+    - format=ndjson (default): NDJSON streaming
+    - format=markdown: Markdown streaming
     """
     contents = await file.read()
     if len(contents) > MAX_FILE_SIZE:
@@ -79,24 +76,49 @@ async def ocr_upload(file: UploadFile = File(...)):
             detail=f"Unsupported file type: {ext}. Supported: pdf, {', '.join(sorted(SUPPORTED_IMAGES))}",
         )
 
-    pages: list[OCRPageResult] = []
-    all_text_parts: list[str] = []
-    total_lines = 0
+    selected_engine = get_engine(engine_name)
 
-    for i, img in enumerate(images):
-        result = engine.ocr_image(img)
-        pages.append(
-            OCRPageResult(
-                page=i + 1,
-                text=result["text"],
-                line_count=result["line_count"],
-            )
+    if format == "markdown":
+        return StreamingResponse(
+            _generate_markdown(images, filename, selected_engine),
+            media_type="text/markdown; charset=utf-8",
         )
-        all_text_parts.append(result["text"])
-        total_lines += result["line_count"]
 
-    return OCRResponse(
-        text="\n\n".join(all_text_parts),
-        pages=pages,
-        total_lines=total_lines,
+    return StreamingResponse(
+        _generate_ndjson(images, selected_engine),
+        media_type="application/x-ndjson",
     )
+
+
+def _generate_ndjson(images, ocr_engine):
+    ocr = ocr_engine
+    yield json.dumps({"event": "start", "total_pages": len(images)}) + "\n"
+    for i, img in enumerate(images):
+        try:
+            result = ocr.ocr_image(img)
+            yield json.dumps({
+                "event": "page",
+                "page": i + 1,
+                "text": result["text"],
+                "line_count": result["line_count"],
+            }) + "\n"
+        except Exception as e:
+            yield json.dumps({"event": "error", "message": str(e)}) + "\n"
+            return
+    yield json.dumps({"event": "done"}) + "\n"
+
+
+def _generate_markdown(images, filename: str, ocr_engine):
+    ocr = ocr_engine
+    multi = len(images) > 1
+    if multi:
+        yield f"# OCR Result: {filename}\n\n"
+    for i, img in enumerate(images):
+        try:
+            result = ocr.ocr_image(img)
+            if multi:
+                yield f"## Page {i + 1}\n\n"
+            yield result["text"] + "\n\n"
+        except Exception as e:
+            yield f"\n\n> **Error on page {i + 1}**: {e}\n\n"
+            return

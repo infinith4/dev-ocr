@@ -117,3 +117,7 @@ Thumbs.db
 *.bak
 *.tmp
 *.temp
+/testsdata
+/000079352/**
+/000079352.pdf
+/*.ini

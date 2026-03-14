@@ -56,7 +56,18 @@
       "Bash(python -c \"from backendapp.llm_service import call_llm; print\\(''OK''\\)\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
       "Bash(curl -s http://localhost:5173/)",
-      "Bash(xargs ls -la)"
+      "Bash(xargs ls -la)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(ls -la /workspaces/dev-ocr/000079352/merged/*.md)",
+      "Read(//workspaces/dev-ocr/**)",
+      "Bash(pip install:*)",
+      "Bash(python3 -c \"from paddleocr import PaddleOCR; print\\(''PaddleOCR import OK''\\)\")",
+      "Bash(python3 -m pytest tests/ -v)",
+      "Bash(python3 -c \"import ocr; print\\(''ndlocr-lite available''\\)\")",
+      "Bash(python3 -c \"import paddleocr; print\\(paddleocr.__version__\\)\")",
+      "Bash(python3 -c \":*)",
+      "Bash(PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True python3 -c \":*)",
+      "Bash(pip index:*)"
     ]
   }
 }

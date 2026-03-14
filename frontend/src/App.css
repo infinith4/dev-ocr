@@ -19,10 +19,79 @@
   font-size: 0.9rem;
 }
 
+/* Engine Toggle */
+.engine-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 0;
+  margin-top: 1rem;
+  border: 1px solid #555;
+  border-radius: 8px;
+  overflow: hidden;
+  display: inline-flex;
+}
+
+.engine-btn {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  background: transparent;
+  color: #888;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.engine-btn:not(:last-child) {
+  border-right: 1px solid #555;
+}
+
+.engine-btn:hover:not(.active):not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ccc;
+}
+
+.engine-btn.active {
+  background: #646cff;
+  color: #fff;
+}
+
+.engine-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .app-main {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+}
+
+/* Upload Section */
+.upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.start-ocr-btn {
+  padding: 0.75rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #646cff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.start-ocr-btn:hover:not(:disabled) {
+  background: #535bf2;
+}
+
+.start-ocr-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Upload Area */
@@ -87,6 +156,23 @@
   }
 }
 
+/* Progress Bar */
+.progress-bar {
+  width: 100%;
+  max-width: 300px;
+  height: 6px;
+  background: #333;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #646cff;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
 /* Error */
 .error {
   background: rgba(255, 80, 80, 0.1);
@@ -122,9 +208,26 @@
   flex: 1;
 }
 
-.copy-btn {
+.result-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.secondary-btn {
   padding: 0.4rem 1rem;
   font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .result-header {
+    flex-wrap: wrap;
+  }
+
+  .result-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* Tabs */

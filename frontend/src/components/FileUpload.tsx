@@ -1,13 +1,17 @@
 import { useCallback, useRef, useState } from "react";
+import type { OcrProgress } from "../api/ocr";
 
 interface FileUploadProps {
   onFileSelect: (file: File) => void;
+  onStartOcr: () => void;
   loading: boolean;
+  hasFile: boolean;
+  progress?: OcrProgress | null;
 }
 
 const ACCEPTED = ".pdf,.jpg,.jpeg,.png,.tiff,.tif,.jp2,.bmp";
 
-export default function FileUpload({ onFileSelect, loading }: FileUploadProps) {
+export default function FileUpload({ onFileSelect, onStartOcr, loading, hasFile, progress }: FileUploadProps) {
   const [dragOver, setDragOver] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -45,41 +49,62 @@ export default function FileUpload({ onFileSelect, loading }: FileUploadProps) {
   };
 
   return (
-    <div
-      className={`upload-area ${dragOver ? "drag-over" : ""}`}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-      onClick={() => inputRef.current?.click()}
-    >
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPTED}
-        onChange={handleChange}
-        style={{ display: "none" }}
-      />
-      {loading ? (
-        <div className="loading">
-          <div className="spinner" />
-          <p>OCR processing...</p>
-        </div>
-      ) : selectedFile ? (
-        <div className="file-info">
-          <p className="file-name">{selectedFile.name}</p>
-          <p className="file-size">{formatSize(selectedFile.size)}</p>
-          <p className="hint">Click or drop to change file</p>
-        </div>
-      ) : (
-        <div className="placeholder">
-          <p className="upload-icon">+</p>
-          <p>Click or drag & drop a file here</p>
-          <p className="hint">PDF, JPG, PNG, TIFF, BMP</p>
-        </div>
-      )}
+    <div className="upload-section">
+      <div
+        className={`upload-area ${dragOver ? "drag-over" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        onClick={() => !loading && inputRef.current?.click()}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPTED}
+          onChange={handleChange}
+          style={{ display: "none" }}
+        />
+        {loading ? (
+          <div className="loading">
+            <div className="spinner" />
+            {progress && progress.total > 0 ? (
+              <>
+                <p>Processing page {progress.current} / {progress.total}...</p>
+                <div className="progress-bar">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <p>OCR processing...</p>
+            )}
+          </div>
+        ) : selectedFile ? (
+          <div className="file-info">
+            <p className="file-name">{selectedFile.name}</p>
+            <p className="file-size">{formatSize(selectedFile.size)}</p>
+            <p className="hint">Click or drop to change file</p>
+          </div>
+        ) : (
+          <div className="placeholder">
+            <p className="upload-icon">+</p>
+            <p>Click or drag & drop a file here</p>
+            <p className="hint">PDF, JPG, PNG, TIFF, BMP</p>
+          </div>
+        )}
+      </div>
+      <button
+        className="start-ocr-btn"
+        onClick={onStartOcr}
+        disabled={!hasFile || loading}
+      >
+        {loading ? "Processing..." : "OCR Start"}
+      </button>
     </div>
   );
 }
